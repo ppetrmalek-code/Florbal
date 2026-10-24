@@ -17,6 +17,9 @@ p{margin:0;max-width:30ch;font-size:18px;line-height:1.4}
 button{font:inherit;font-weight:900;font-size:22px;padding:14px 28px;border:0;border-radius:40px;background:var(--ball);color:var(--ink);cursor:pointer;min-width:240px}
 button.alt{background:transparent;color:var(--line);border:3px solid var(--line)}
 button:focus-visible{outline:4px solid var(--ok);outline-offset:3px}
+#spd{display:flex;gap:8px}
+.seg{min-width:0;font-size:18px;padding:10px 16px;background:transparent;color:var(--line);border:3px solid var(--line)}
+.seg.on{background:var(--ok);color:var(--ink);border-color:var(--ok)}
 #msg{color:var(--ok);min-height:1.4em}
 </style></head><body>
 <canvas id="cv"></canvas>
@@ -24,7 +27,8 @@ button:focus-visible{outline:4px solid var(--ok);outline-offset:3px}
 <div class="pane" id="menu">
 <h1>Florbal aréna</h1>
 <p>Dotkni se míčků rukama, nohama nebo hokejkou dřív, než zmizí.</p>
-<p>Postav tablet pevně a tak, aby na tebe kamera dobře viděla.</p>
+<p>Postav tablet pevně a tak, aby na tebe kamera dobře viděla. Po klepnutí je 10 vteřin na přípravu.</p>
+<div id="spd"><button class="seg" data-s="0">Pomalu</button><button class="seg on" data-s="1">Normálně</button><button class="seg" data-s="2">Rychle</button></div>
 <button id="b1">Hrát s kamerou</button>
 <button id="b2" class="alt">Hrát dotykem</button>
 <div id="msg"></div>
@@ -39,6 +43,7 @@ const $=id=>document.getElementById(id);
 const cv=$('cv'),ctx=cv.getContext('2d');
 const mc=document.createElement('canvas'),mx=mc.getContext('2d',{willReadFrequently:true});
 const vid=document.createElement('video');vid.playsInline=true;vid.muted=true;
+const SP=[{life:4200,gap:1500,max:2},{life:3000,gap:950,max:3},{life:2000,gap:600,max:3}];let sp=1,cEnd=0;
 let W,H,mw=64,mh=36,cam=false,state='menu',score=0,tEnd=0,nextSp=0,targets=[],fx=[],prev=null,best=0,useCam=false,ac=null;
 try{best=+localStorage.getItem('florbal-best')||0}catch(e){}
 function resize(){const d=devicePixelRatio||1;W=cv.clientWidth;H=cv.clientHeight;cv.width=W*d;cv.height=H*d;ctx.setTransform(d,0,0,d,0,0);mh=Math.max(20,Math.round(mw*H/W));mc.width=mw;mc.height=mh;prev=null}
@@ -50,8 +55,8 @@ function beep(f){try{ac=ac||new AudioContext();const o=ac.createOscillator(),g=a
 function hit(t,now){targets.splice(targets.indexOf(t),1);score+=10;fx.push({x:t.x*W,y:t.y*H,t:now});beep(520+Math.min(score,300)*2)}
 function ball(x,y,r,a){ctx.save();ctx.globalAlpha=a;ctx.fillStyle='#ff7b1c';ctx.beginPath();ctx.arc(x,y,r,0,7);ctx.fill();ctx.lineWidth=4;ctx.strokeStyle='#f3f7ee';ctx.stroke();ctx.fillStyle='#0b1f3a';const h=r*.16;[[0,0]].concat([0,1,2,3,4,5].map(i=>[Math.cos(i*1.047)*r*.58,Math.sin(i*1.047)*r*.58])).forEach(p=>{ctx.beginPath();ctx.arc(x+p[0],y+p[1],h,0,7);ctx.fill()});ctx.restore()}
 function draw(now,m){const R=.1*Math.min(W,H);
-if(now>=nextSp&&targets.length<3){const rr=R/W;targets.push({x:.12+Math.random()*.76,y:.2+Math.random()*.65,r:rr,born:now});nextSp=now+650}
-for(const t of targets.slice()){const age=now-t.born,life=2400;if(age>life){targets.splice(targets.indexOf(t),1);continue}
+if(now>=nextSp&&targets.length<SP[sp].max){const rr=R/W;targets.push({x:.12+Math.random()*.76,y:.2+Math.random()*.65,r:rr,born:now});nextSp=now+SP[sp].gap}
+for(const t of targets.slice()){const age=now-t.born,life=SP[sp].life;if(age>life){targets.splice(targets.indexOf(t),1);continue}
 if(m&&age>300&&ratio(t,m)>.2){hit(t,now);continue}
 const x=t.x*W,y=t.y*H,pop=Math.min(1,age/180);ball(x,y,R*pop,1);ctx.strokeStyle='#ffe14d';ctx.lineWidth=6;ctx.beginPath();ctx.arc(x,y,R*1.2,-1.57,-1.57+6.28*(1-age/life));ctx.stroke()}
 for(const f of fx.slice()){const a=(now-f.t)/450;if(a>1){fx.splice(fx.indexOf(f),1);continue}ctx.strokeStyle='rgba(255,225,77,'+(1-a)+')';ctx.lineWidth=8;ctx.beginPath();ctx.arc(f.x,f.y,R*(1+a*1.4),0,7);ctx.stroke();ctx.fillStyle='rgba(255,225,77,'+(1-a)+')';ctx.font='900 32px "Trebuchet MS",sans-serif';ctx.textAlign='center';ctx.fillText('+10',f.x,f.y-R*(1.2+a))}
@@ -59,10 +64,11 @@ const left=Math.max(0,Math.ceil((tEnd-now)/1000));$('tm').textContent=left;$('sc
 if(now>=tEnd)finish()}
 function loop(now){requestAnimationFrame(loop);const ok=cam&&vid.videoWidth;
 if(ok){cover(ctx,W,H);ctx.fillStyle='rgba(11,31,58,.38)';ctx.fillRect(0,0,W,H)}else{ctx.fillStyle='#1c6b45';ctx.fillRect(0,0,W,H);ctx.strokeStyle='rgba(243,247,238,.55)';ctx.lineWidth=4;ctx.strokeRect(W*.04,H*.06,W*.92,H*.88);ctx.beginPath();ctx.moveTo(W/2,H*.06);ctx.lineTo(W/2,H*.94);ctx.stroke();ctx.beginPath();ctx.arc(W/2,H/2,Math.min(W,H)*.14,0,7);ctx.stroke()}
-const m=ok?motion():null;if(state==='play')draw(now,m)}
-function begin(){score=0;targets=[];fx=[];state='play';const n=performance.now();tEnd=n+30000;nextSp=n;prev=null;$('menu').classList.add('off');$('end').classList.add('off')}
+const m=ok?motion():null;if(state==='count'){const s=Math.ceil((cEnd-now)/1000);if(s<=0){state='play';tEnd=now+30000;nextSp=now}else{const u=Math.min(W,H);ctx.fillStyle='#f3f7ee';ctx.textAlign='center';ctx.font='900 '+u*.22+'px "Trebuchet MS",sans-serif';ctx.fillText(s,W/2,H/2+u*.08);ctx.font='900 '+u*.06+'px "Trebuchet MS",sans-serif';ctx.fillText('Připrav se!',W/2,H*.28)}}if(state==='play')draw(now,m)}
+function begin(){score=0;targets=[];fx=[];state='count';cEnd=performance.now()+10000;prev=null;$('sc').textContent=0;$('tm').textContent=30;$('menu').classList.add('off');$('end').classList.add('off')}
 function finish(){state='over';if(score>best){best=score;try{localStorage.setItem('florbal-best',best)}catch(e){}}$('res').textContent=score+' bodů';$('bst').textContent='Nejlepší výsledek: '+best+' bodů';$('end').classList.remove('off');beep(330)}
 function startCam(){$('msg').textContent='Povol kameru…';(navigator.mediaDevices?navigator.mediaDevices.getUserMedia({video:{facingMode:'user'},audio:false}):Promise.reject({name:'NotSupported'})).then(s=>{vid.srcObject=s;return vid.play()}).then(()=>{cam=true;useCam=true;begin()}).catch(e=>{cam=false;useCam=false;$('msg').textContent='Kamera není dostupná ('+((e&&e.name)||'chyba')+'). Povol ji v nastavení prohlížeče, nebo hraj dotykem.'})}
+document.querySelectorAll('.seg').forEach(b=>b.onclick=()=>{sp=+b.dataset.s;document.querySelectorAll('.seg').forEach(x=>x.classList.toggle('on',x===b))});
 $('b1').onclick=startCam;
 $('b2').onclick=()=>{useCam=false;begin()};
 $('b3').onclick=()=>{if(useCam)begin();else begin()};
